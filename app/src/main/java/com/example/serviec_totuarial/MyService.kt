@@ -4,12 +4,15 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.support.v4.media.session.MediaSessionCompat
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 
 class MyService : Service() {
@@ -38,7 +41,7 @@ class MyService : Service() {
             if (music != null && music is Music) {
                 mMusic = music
                 startMusic(music)
-                sendNotification(music)
+                sendNotificationMedia(music)
                 sendActionToActivity(ACTION_START)
             }
         }
@@ -56,40 +59,80 @@ class MyService : Service() {
         isPlaying = true
     }
 
-    private fun sendNotification(data: Music) {
-        val remoteViews = RemoteViews(packageName, R.layout.notifiacation_mp3)
-        remoteViews.apply {
-            setImageViewResource(R.id.imv_notification_song, data.image)
-            setTextViewText(R.id.tv_notification_title_single, data.single)
-            setTextViewText(R.id.tv_notification_title_song, data.title)
-            setImageViewResource(R.id.imv_notification_pause_or_play, R.drawable.pause)
+    private fun sendNotificationMedia(music: Music) {
+        val mediaSession = MediaSessionCompat(this, "tag")
+        val notification = NotificationCompat.Builder(this, GlobalApp.channelID).apply {
+            setSmallIcon(R.drawable.audio)
+            setContentTitle(music.title)
+            setContentText(music.single)
+                .setLargeIcon(BitmapFactory.decodeResource(resources, music.image))
+                .setStyle(
+                    androidx.media.app.NotificationCompat.MediaStyle()
+                        .setShowActionsInCompactView(1, 3/* #1: pause button \*/)
+                        .setMediaSession(mediaSession.sessionToken)
+                )
         }
         if (isPlaying) {
-            remoteViews.setImageViewResource(R.id.imv_notification_pause_or_play, R.drawable.pause)
-            remoteViews.setOnClickPendingIntent(
-                R.id.imv_notification_pause_or_play,
-                getPendingIntent(this, ACTION_PAUSE)
-            )
+            notification.apply {
+                addAction(R.drawable.previous, "Previous", null) // #0
+                addAction(
+                    R.drawable.pause,
+                    "Pause",
+                    getPendingIntent(this@MyService, ACTION_PAUSE)
+                )  // #1
+                addAction(R.drawable.next, "Next", null)
+                addAction(R.drawable.clear, "Next", getPendingIntent(this@MyService, ACTION_CLEAR))
+            }
         } else {
-            remoteViews.setImageViewResource(R.id.imv_notification_pause_or_play, R.drawable.play)
-            remoteViews.setOnClickPendingIntent(
-                R.id.imv_notification_pause_or_play,
-                getPendingIntent(this, ACTION_RESUME)
-            )
-        }
-        remoteViews.setOnClickPendingIntent(
-            R.id.imv_notification_clear,
-            getPendingIntent(this, ACTION_CLEAR)
-        )
+            notification.apply {
+                addAction(R.drawable.previous, "Previous", null) // #0
+                addAction(
+                    R.drawable.play,
+                    "Pause",
+                    getPendingIntent(this@MyService, ACTION_RESUME)
+                )  // #1
+                addAction(R.drawable.next, "Next", null)
+                addAction(R.drawable.clear, "Next", getPendingIntent(this@MyService, ACTION_CLEAR))
 
-        val notification = NotificationCompat.Builder(this, GlobalApp.channelID).apply {
-            setContentTitle(getString(R.string.txt_title_notification))
-            setCustomContentView(remoteViews)
-            setSmallIcon(R.drawable.ic_launcher_foreground)
-            setSound(null)
+            }
         }
         startForeground(1, notification.build())
     }
+
+//    private fun sendNotification(data: Music) {
+//        val remoteViews = RemoteViews(packageName, R.layout.notifiacation_mp3)
+//        remoteViews.apply {
+//            setImageViewResource(R.id.imv_notification_song, data.image)
+//            setTextViewText(R.id.tv_notification_title_single, data.single)
+//            setTextViewText(R.id.tv_notification_title_song, data.title)
+//            setImageViewResource(R.id.imv_notification_pause_or_play, R.drawable.pause)
+//        }
+//        if (isPlaying) {
+//            remoteViews.setImageViewResource(R.id.imv_notification_pause_or_play, R.drawable.pause)
+//            remoteViews.setOnClickPendingIntent(
+//                R.id.imv_notification_pause_or_play,
+//                getPendingIntent(this, ACTION_PAUSE)
+//            )
+//        } else {
+//            remoteViews.setImageViewResource(R.id.imv_notification_pause_or_play, R.drawable.play)
+//            remoteViews.setOnClickPendingIntent(
+//                R.id.imv_notification_pause_or_play,
+//                getPendingIntent(this, ACTION_RESUME)
+//            )
+//        }
+//        remoteViews.setOnClickPendingIntent(
+//            R.id.imv_notification_clear,
+//            getPendingIntent(this, ACTION_CLEAR)
+//        )
+//
+//        val notification = NotificationCompat.Builder(this, GlobalApp.channelID).apply {
+//            setContentTitle(getString(R.string.txt_title_notification))
+//            setCustomContentView(remoteViews)
+//            setSmallIcon(R.drawable.ic_launcher_foreground)
+//            setSound(null)
+//        }
+//        startForeground(1, notification.build())
+//    }
 
     private fun getPendingIntent(context: Context, action: Int): PendingIntent {
         val intent = Intent(this, MyReceiver::class.java)
@@ -119,12 +162,12 @@ class MyService : Service() {
             }
             ACTION_PAUSE -> {
                 pauseMusic()
-                sendNotification(mMusic)
+                sendNotificationMedia(mMusic)
                 sendActionToActivity(ACTION_PAUSE)
             }
             ACTION_RESUME -> {
                 resumeMusic()
-                sendNotification(mMusic)
+                sendNotificationMedia(mMusic)
                 sendActionToActivity(ACTION_RESUME)
             }
         }
